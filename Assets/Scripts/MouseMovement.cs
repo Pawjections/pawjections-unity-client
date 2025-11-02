@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Networking;
 
 public class MouseMovement : MonoBehaviour
 {
@@ -15,6 +16,10 @@ public class MouseMovement : MonoBehaviour
     private Vector2 _moveDirection;
     private Camera _mainCam;
     private Vector2 _screenBounds;
+
+    // Optional: don't spam the console if detector missing
+    private float _noDetectorWarnTimer = 0f;
+    private const float NoDetectorWarnInterval = 3f;
 
     public void SetCatDetector(CatDetector cd)
     {
@@ -35,9 +40,21 @@ public class MouseMovement : MonoBehaviour
         MoveMouse();
         CheckBounds();
     }
-    
+
     private void UpdateDirection()
     {
+        if (catDetector == null)
+        {
+            // no cat assigned yet — wander
+            _noDetectorWarnTimer += Time.deltaTime;
+            if (_noDetectorWarnTimer > NoDetectorWarnInterval)
+            {
+                Debug.LogWarning($"{name}: CatDetector not assigned yet. Spawner should call SetCatDetector().");
+                _noDetectorWarnTimer = 0f;
+            }
+            return;
+        }
+
         Vector2 catPos = catDetector.GetCatWorldPosition();
         float distance = Vector2.Distance(transform.position, catPos);
 
@@ -45,62 +62,68 @@ public class MouseMovement : MonoBehaviour
         {
             // Mouse caught!
             Debug.Log("Caught!");
+            
+            using (UnityWebRequest www = UnityWebRequest.Post("http://homeassistant.local:8123/api/services/button/press", "{\"entity_id\":\"button.granary_smart_feeder_manual_feed\"}", "application/json"))
+            {
+                www.SetRequestHeader("Authorization",
+                    "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJlMjc2ZmMxODE4MjU0MTlmOTk1MTliM2ZmNWI4OGZkZCIsImlhdCI6MTc2MjA3NTUwMywiZXhwIjoyMDc3NDM1NTAzfQ.CwWcWM0Jk3W6UYvmVbK0SQcKD-YXAhKq-djeMXM16fA");
+                www.SendWebRequest();
+                
+            }
+            
+            
             _caught = true;
             return;
-        } 
-        
+        }
+
         if (distance <= flightDistance)
         {
             // Run away from cursor
             _moveDirection = ((Vector2)transform.position - catPos).normalized;
         }
-        // Else: keep current movement direction
+        // Else: keep current movement direction (wandering)
     }
 
     private void MoveMouse()
     {
-        // Move the mouse forward
         transform.Translate(_moveDirection * (moveSpeed * Time.deltaTime), Space.World);
-        
+
         if (_moveDirection != Vector2.zero)
         {
-            // Smooth rotation
             float targetAngle = Mathf.Atan2(_moveDirection.y, _moveDirection.x) * Mathf.Rad2Deg - 90f;
             Quaternion targetRotation = Quaternion.AngleAxis(targetAngle, Vector3.forward);
-
-            // Smoothly rotate towards target
             transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
         }
     }
-    
+
     private void CheckBounds()
     {
         Vector3 pos = transform.position;
 
-        // If mouse leaves bounds, pick a new direction
-        if (pos.x > _screenBounds.x || pos.x < -_screenBounds.x ||
-            pos.y > _screenBounds.y || pos.y < -_screenBounds.y)
+        if (pos.x < _screenBottomLeft.x || pos.x > _screenTopRight.x ||
+            pos.y < _screenBottomLeft.y || pos.y > _screenTopRight.y)
         {
             PickNewDirection();
 
-            // Clamp back inside
-            pos.x = Mathf.Clamp(pos.x, -_screenBounds.x, _screenBounds.x);
-            pos.y = Mathf.Clamp(pos.y, -_screenBounds.y, _screenBounds.y);
+            pos.x = Mathf.Clamp(pos.x, _screenBottomLeft.x, _screenTopRight.x);
+            pos.y = Mathf.Clamp(pos.y, _screenBottomLeft.y, _screenTopRight.y);
             transform.position = pos;
         }
     }
-    
-    private void PickNewDirection()
-    {
-        float angle = Random.Range(0f, 360f);
-        _moveDirection = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)).normalized;
-    }
+
+    // ---- helper fields and methods for proper bounds ----
+    private Vector3 _screenTopRight;
+    private Vector3 _screenBottomLeft;
 
     private void SetScreenBounds()
     {
-        // World coordinates of screen corners
-        Vector3 screenTopRight = _mainCam.ScreenToWorldPoint(new Vector3(Screen.width, Screen.height, 0));
+        _screenTopRight = _mainCam.ScreenToWorldPoint(new Vector3(Screen.width, Screen.height, 0));
+        _screenBottomLeft = _mainCam.ScreenToWorldPoint(Vector3.zero);
+    }
 
-        _screenBounds = new Vector2(screenTopRight.x - 0.5f, screenTopRight.y - 0.5f);
+    private void PickNewDirection()
+    {
+        float angle = Random.Range(0f, 360f);
+        _moveDirection = new Vector2(Mathf.Cos(angle * Mathf.Deg2Rad), Mathf.Sin(angle * Mathf.Deg2Rad)).normalized;
     }
 }

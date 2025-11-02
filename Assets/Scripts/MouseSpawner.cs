@@ -6,11 +6,11 @@ public class MouseSpawner : MonoBehaviour
     public GameObject mousePrefab;
     public int maxMice = 3;
     public float spawnInterval = 5f;
-    
+
     private float _spawnTimer;
     private Camera _mainCam;
     private readonly List<GameObject> _activeMice = new List<GameObject>();
-    
+
     [SerializeField] private CatDetector catDetectorInScene;
     [SerializeField] private float spawnMargin = 1f;
     private Vector3 _screenTopRight;
@@ -21,21 +21,31 @@ public class MouseSpawner : MonoBehaviour
         _mainCam = Camera.main;
         _screenTopRight = _mainCam.ScreenToWorldPoint(new Vector3(Screen.width, Screen.height, 0));
         _screenBottomLeft = _mainCam.ScreenToWorldPoint(Vector3.zero);
+
+        if (catDetectorInScene == null)
+        {
+            catDetectorInScene = FindObjectOfType<CatDetector>();
+            if (catDetectorInScene != null)
+                Debug.LogWarning("MouseSpawner: catDetectorInScene was not assigned in inspector — auto-found one in the scene.");
+            else
+                Debug.LogError("MouseSpawner: No CatDetector found in scene. Please assign one to the spawner or add a CatDetector to the scene.");
+        }
     }
 
     private void Update()
     {
         HandleSpawning();
-        CleanupDestoryedMice();
+        CleanupDestroyedMice();
     }
 
     private void HandleSpawning()
     {
         _spawnTimer += Time.deltaTime;
 
-        bool canSpawn = (_activeMice.Count < maxMice);
+        if (_activeMice.Count >= maxMice)
+            return;
 
-        if (canSpawn && _spawnTimer >= spawnInterval)
+        if (_spawnTimer >= spawnInterval)
         {
             _spawnTimer = 0f;
             SpawnMouse();
@@ -53,11 +63,22 @@ public class MouseSpawner : MonoBehaviour
 
     private void AssignCatDetector(GameObject mouse)
     {
-        // Assign the cat detector to the spawned mouse
+        if (catDetectorInScene == null)
+        {
+            Debug.LogWarning("AssignCatDetector skipped: no catDetectorInScene available.");
+            return;
+        }
+
         MouseMovement movement = mouse.GetComponent<MouseMovement>();
-        if (movement != null && catDetectorInScene != null)
+        if (movement != null)
         {
             movement.SetCatDetector(catDetectorInScene);
+            // helpful debug to ensure assignment happened
+            // Debug.Log($"Assigned CatDetector to {mouse.name}");
+        }
+        else
+        {
+            Debug.LogWarning("Spawned mouse prefab does not contain MouseMovement component.");
         }
     }
 
@@ -68,10 +89,9 @@ public class MouseSpawner : MonoBehaviour
 
         return new Vector3(x, y, 0f);
     }
-    
-    private void CleanupDestoryedMice()
+
+    private void CleanupDestroyedMice()
     {
-        // Clean up destroyed mice from the list
         _activeMice.RemoveAll(m => m == null);
     }
 }

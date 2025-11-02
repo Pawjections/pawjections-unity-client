@@ -60,6 +60,9 @@ public class CatDetector : MonoBehaviour
             // Convert to screen pixels
             float sx = ux * Screen.width;
             float sy = uy * Screen.height;
+            
+            // flip sy
+            sy = -sy;
 
             // Convert to world position
             Vector3 screenPoint = new Vector3(sx, sy, Mathf.Abs(_cam.transform.position.z));

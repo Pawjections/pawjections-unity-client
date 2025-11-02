@@ -61,8 +61,8 @@ public class CatDetector : MonoBehaviour
             float sx = ux * Screen.width;
             float sy = uy * Screen.height;
             
-            // flip sy
-            sy = -sy;
+            // Flip Y: screen y goes from top to bottom
+            sy = Screen.height - sy;
 
             // Convert to world position
             Vector3 screenPoint = new Vector3(sx, sy, Mathf.Abs(_cam.transform.position.z));
